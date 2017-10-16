@@ -35,6 +35,7 @@ namespace OBD.NET.Common.Devices
 		public delegate void RawDataReceivedEventHandler( object sender, RawDataReceivedEventArgs args );
 
 		public event RawDataReceivedEventHandler RawDataReceived;
+		public event EventHandler CanError;
 
 		#endregion
 
@@ -156,7 +157,11 @@ namespace OBD.NET.Common.Devices
 
 			RawDataReceived?.Invoke( this, new RawDataReceivedEventArgs( message, timestamp ) );
 
-			if ( message.Length > 4 )
+			if ( message.ToUpper() == "CAN ERROR" )
+			{
+				this.CanError?.Invoke( this, new EventArgs() );
+			}
+			else if ( message.Length > 4 )
 			{
 				string resModeStr = message.Substring( 0, 2 );
 				try
