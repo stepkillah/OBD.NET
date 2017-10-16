@@ -2,7 +2,7 @@
 {
     public interface IOBDData
     {
-        byte PID { get; }
+        int PID { get; }
 
         void Load(string data);
     }
