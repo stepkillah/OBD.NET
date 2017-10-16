@@ -7,7 +7,7 @@ namespace OBD.NET.Common.OBDData
     {
         #region Properties & Fields
 
-        public byte PID { get; }
+        public int PID { get; }
         private readonly int _length;
 
         private byte[] _rawData;
@@ -35,13 +35,13 @@ namespace OBD.NET.Common.OBDData
 
         #region Constructors
 
-        protected AbstractOBDData(byte pid, int length)
+        protected AbstractOBDData(int pid, int length)
         {
             this.PID = pid;
             this._length = length;
         }
 
-        protected AbstractOBDData(byte pid, int length, byte[] rawData)
+        protected AbstractOBDData(int pid, int length, byte[] rawData)
             : this(pid, length)
         {
             this.RawData = rawData;
