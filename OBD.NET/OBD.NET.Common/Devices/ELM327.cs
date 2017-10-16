@@ -158,16 +158,21 @@ namespace OBD.NET.Common.Devices
 
 			if ( message.Length > 4 )
 			{
-				if ( message[ 0 ] == '4' )
+				string resModeStr = message.Substring( 0, 2 );
+				try
 				{
-					byte mode = (byte) message[ 1 ].GetHexVal();
-					if ( mode == this.GetModeByte() )
+					byte resMode = Convert.ToByte( resModeStr, 16 );
+
+					if ( resMode == this.GetModeByte() + 0x40 )
 					{
 						byte pid = (byte) message.Substring( 2, 2 ).GetHexVal();
-						if ( DataTypeCache.TryGetValue( pid, out Type dataType ) )
+						int longPid = (int) message.Substring( 2, 4 ).GetHexVal();
+						if ( DataTypeCache.TryGetValue( longPid, out Type dataType ) || DataTypeCache.TryGetValue( pid, out dataType ) )
 						{
 							IOBDData obdData = (IOBDData) Activator.CreateInstance( dataType );
-							obdData.Load( message.Substring( 4, message.Length - 4 ) );
+							bool isLong = obdData.PID == longPid;
+							int start = isLong ? 6 : 4;
+							obdData.Load( message.Substring( start, message.Length - start ) );
 
 							if ( DataReceivedEventHandlers.TryGetValue( dataType, out IDataEventManager dataEventManager ) )
 								dataEventManager.RaiseEvent( this, obdData, timestamp );
@@ -178,6 +183,10 @@ namespace OBD.NET.Common.Devices
 							return obdData;
 						}
 					}
+				}
+				catch ( FormatException )
+				{
+					// Ignore format exceptions from convert
 				}
 			}
 			return null;
