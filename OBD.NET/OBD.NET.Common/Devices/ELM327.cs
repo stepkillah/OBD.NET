@@ -112,7 +112,7 @@ namespace OBD.NET.Common.Devices
 		{
 			Logger?.WriteLine( "Requesting Type " + typeof( T ).Name + " ...", OBDLogLevel.Debug );
 
-			int pid = ResolvePid<T>();
+			int   pid  = ResolvePid<T>();
 			byte? mode = ResolveMode<T>();
 
 			RequestData( pid, mode );
@@ -138,7 +138,7 @@ namespace OBD.NET.Common.Devices
 			where T : class, IOBDData, new()
 		{
 			Logger?.WriteLine( "Requesting Type " + typeof( T ).Name + " ...", OBDLogLevel.Debug );
-			int pid = ResolvePid<T>();
+			int   pid  = ResolvePid<T>();
 			byte? mode = ResolveMode<T>();
 			return await RequestDataAsync( pid, mode ) as T;
 		}
@@ -174,12 +174,18 @@ namespace OBD.NET.Common.Devices
 				{
 					byte resMode = Convert.ToByte( resModeStr, 16 );
 
-					if ( resMode == this.GetModeByte() + 0x40 )
+					if ( resMode == this.GetModeByte() + 0x40 || ModeCache.ContainsValue( (byte) ( resMode - 0x40 ) ) )
 					{
 						byte pid     = (byte) message.Substring( 2, 2 ).GetHexVal();
 						int  longPid = message.Substring( 2, 4 ).GetHexVal();
 						if ( DataTypeCache.TryGetValue( longPid, out Type dataType ) || DataTypeCache.TryGetValue( pid, out dataType ) )
 						{
+							if ( ModeCache.TryGetValue( dataType, out var modeByte ) && ( modeByte ?? this.GetModeByte() ) != resMode - 0x40 )
+							{
+								// Mode didn't match PID
+								return null;
+							}
+
 							IOBDData obdData = (IOBDData) Activator.CreateInstance( dataType );
 							bool     isLong  = obdData.PID == longPid;
 							int      start   = isLong ? 6 : 4;
@@ -245,7 +251,7 @@ namespace OBD.NET.Common.Devices
 		protected virtual byte? AddToModeCache( Type obdDataType )
 		{
 			var modeAttribute = obdDataType.GetTypeInfo().GetCustomAttribute<ObdModeAttribute>();
-			var modeOverride = modeAttribute?.Mode;
+			var modeOverride  = modeAttribute?.Mode;
 
 			ModeCache.Add( obdDataType, modeOverride );
 
