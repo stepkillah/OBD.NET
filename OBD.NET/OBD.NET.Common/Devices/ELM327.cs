@@ -180,7 +180,7 @@ namespace OBD.NET.Common.Devices
 		public virtual async Task<IOBDData> RequestDataAsync(Type type)
 		{
 			Logger?.WriteLine("Requesting Type " + type.Name + " ...", OBDLogLevel.Debug);
-			byte pid = ResolvePid(type);
+			int pid = ResolvePid(type);
 			return await RequestDataAsync(pid) as IOBDData;
 		}
 
