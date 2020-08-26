@@ -27,6 +27,8 @@ namespace OBD.NET.Common.Devices
 
 		protected Mode Mode { get; set; } = Mode.ShowCurrentData; //TODO DarthAffe 26.06.2016: Implement different modes
 
+		protected string MessageChunk { get; set; }
+
 		#endregion
 
 		#region Events
@@ -171,6 +173,18 @@ namespace OBD.NET.Common.Devices
 		}
 
 		/// <summary>
+		/// Requests the data asynchronous and return the data when available
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		public virtual async Task<IOBDData> RequestDataAsync(Type type)
+		{
+			Logger?.WriteLine("Requesting Type " + type.Name + " ...", OBDLogLevel.Debug);
+			byte pid = ResolvePid(type);
+			return await RequestDataAsync(pid) as IOBDData;
+		}
+
+		/// <summary>
 		/// Request data based on a pid
 		/// </summary>
 		/// <param name="pid">The pid of the requested data</param>
@@ -186,6 +200,8 @@ namespace OBD.NET.Common.Devices
 
 		protected override object ProcessMessage( string message )
 		{
+			if (message == null) return null;
+
 			DateTime timestamp = DateTime.Now;
 
 			RawDataReceived?.Invoke( this, new RawDataReceivedEventArgs( message, timestamp ) );
@@ -196,41 +212,58 @@ namespace OBD.NET.Common.Devices
 			}
 			else if ( message.Length > 4 )
 			{
-				string resModeStr = message.Substring( 0, 2 );
-				try
+				// DarthAffe 15.08.2020: Splitted messages are prefixed with 0: (first chunk) and 1: (second chunk)
+				// DarthAffe 15.08.2020: They also seem to be always preceded by a '009'-message, but since that's to short to be processed it should be safe to ignore.
+				// DarthAffe 15.08.2020: Since that behavior isn't really documented (at least I wasn't able to find it) that's all trial and error and might not work for all pids with long results.
+				if (message[1] == ':')
 				{
-					byte resMode = Convert.ToByte( resModeStr, 16 );
-
-					if ( resMode == this.GetModeByte() + 0x40 || ModeCache.ContainsValue( (byte) ( resMode - 0x40 ) ) )
+					if (message[0] == '0')
+						MessageChunk = message.Substring(2, message.Length - 2);
+					else if (message[0] == '1')
 					{
-						byte pid     = (byte) message.Substring( 2, 2 ).GetHexVal();
-						int  longPid = message.Substring( 2, 4 ).GetHexVal();
-						if ( DataTypeCache.TryGetValue( longPid, out Type dataType ) || DataTypeCache.TryGetValue( pid, out dataType ) )
-						{
-							if ( ModeCache.TryGetValue( dataType, out var modeByte ) && ( modeByte ?? this.GetModeByte() ) != resMode - 0x40 )
-							{
-								// Mode didn't match PID
-								return null;
-							}
-
-							IOBDData obdData = (IOBDData) Activator.CreateInstance( dataType );
-							bool     isLong  = obdData.PID == longPid;
-							int      start   = isLong ? 6 : 4;
-							obdData.Load( message.Substring( start, message.Length - start ) );
-
-							if ( DataReceivedEventHandlers.TryGetValue( dataType, out IDataEventManager dataEventManager ) )
-								dataEventManager.RaiseEvent( this, obdData, timestamp );
-
-							if ( DataReceivedEventHandlers.TryGetValue( typeof(IOBDData), out IDataEventManager genericDataEventManager ) )
-								genericDataEventManager.RaiseEvent( this, obdData, timestamp );
-
-							return obdData;
-						}
+						string fullMessage = MessageChunk + message.Substring(2, message.Length - 2);
+						MessageChunk = null;
+						return ProcessMessage(fullMessage);
 					}
 				}
-				catch ( FormatException )
+				else
 				{
-					// Ignore format exceptions from convert
+					string resModeStr = message.Substring( 0, 2 );
+					try
+					{
+						byte resMode = Convert.ToByte( resModeStr, 16 );
+
+						if ( resMode == this.GetModeByte() + 0x40 || ModeCache.ContainsValue( (byte) ( resMode - 0x40 ) ) )
+						{
+							byte pid     = (byte) message.Substring( 2, 2 ).GetHexVal();
+							int  longPid = message.Substring( 2, 4 ).GetHexVal();
+							if ( DataTypeCache.TryGetValue( longPid, out Type dataType ) || DataTypeCache.TryGetValue( pid, out dataType ) )
+							{
+								if ( ModeCache.TryGetValue( dataType, out var modeByte ) && ( modeByte ?? this.GetModeByte() ) != resMode - 0x40 )
+								{
+									// Mode didn't match PID
+									return null;
+								}
+
+								IOBDData obdData = (IOBDData) Activator.CreateInstance( dataType );
+								bool     isLong  = obdData.PID == longPid;
+								int      start   = isLong ? 6 : 4;
+								obdData.Load( message.Substring( start, message.Length - start ) );
+
+								if ( DataReceivedEventHandlers.TryGetValue( dataType, out IDataEventManager dataEventManager ) )
+									dataEventManager.RaiseEvent( this, obdData, timestamp );
+
+								if ( DataReceivedEventHandlers.TryGetValue( typeof(IOBDData), out IDataEventManager genericDataEventManager ) )
+									genericDataEventManager.RaiseEvent( this, obdData, timestamp );
+
+								return obdData;
+							}
+						}
+					}
+					catch ( FormatException )
+					{
+						// Ignore format exceptions from convert
+					}
 				}
 			}
 
@@ -239,9 +272,12 @@ namespace OBD.NET.Common.Devices
 
 		protected virtual int ResolvePid<T>()
 			where T : class, IOBDData, new()
+			=> ResolvePid(typeof(T));
+
+		protected virtual int ResolvePid(Type type)
 		{
-			if ( !PidCache.TryGetValue( typeof(T), out int pid ) )
-				pid = AddToPidCache<T>();
+			if (!PidCache.TryGetValue(type, out int pid))
+				pid = AddToPidCache(type);
 
 			return pid;
 		}
