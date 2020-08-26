@@ -29,14 +29,14 @@ namespace OBD.NET.Common.Devices
 
 		#endregion
 
-		#region Events 
+		#region Events
 
 		public delegate void DataReceivedEventHandler<T>( object sender, DataReceivedEventArgs<T> args ) where T : IOBDData;
 
 		public delegate void RawDataReceivedEventHandler( object sender, RawDataReceivedEventArgs args );
 
-		public event RawDataReceivedEventHandler RawDataReceived;
-		public event EventHandler                CanError;
+		public event RawDataReceivedEventHandler     RawDataReceived;
+		public event EventHandler<CanErrorEventArgs> CanError;
 
 		#endregion
 
@@ -103,6 +103,33 @@ namespace OBD.NET.Common.Devices
 		/// <param name="command">The command.</param>
 		public virtual void SendCommand( ATCommand command ) => SendCommand( command.Command );
 
+		public virtual async Task<object> SendCommandAsync( string command )
+		{
+			var commandResult = this.SendCommand( command );
+
+			await commandResult.WaitHandle.WaitAsync();
+			return commandResult.Result;
+		}
+
+		public virtual async Task<object> SendCommandAsync( string header, string command, bool waitForResponse = false )
+		{
+			// First set the header
+			await this.SendCommandAsync( ATCommand.SetHeader.Command + " " + header );
+
+			object result;
+
+			// Now send the command
+			if ( waitForResponse )
+				result = await this.SendCommandAsync( command );
+			else
+				result = this.SendCommand( command );
+
+			// Reset the header
+			this.SendCommand( ATCommand.ResetHeader );
+
+			return result;
+		}
+
 		/// <summary>
 		/// Requests the data and calls the handler
 		/// </summary>
@@ -110,7 +137,7 @@ namespace OBD.NET.Common.Devices
 		public virtual void RequestData<T>()
 			where T : class, IOBDData, new()
 		{
-			Logger?.WriteLine( "Requesting Type " + typeof( T ).Name + " ...", OBDLogLevel.Debug );
+			Logger?.WriteLine( "Requesting Type " + typeof(T).Name + " ...", OBDLogLevel.Debug );
 
 			int   pid  = ResolvePid<T>();
 			byte? mode = ResolveMode<T>();
@@ -137,7 +164,7 @@ namespace OBD.NET.Common.Devices
 		public virtual async Task<T> RequestDataAsync<T>()
 			where T : class, IOBDData, new()
 		{
-			Logger?.WriteLine( "Requesting Type " + typeof( T ).Name + " ...", OBDLogLevel.Debug );
+			Logger?.WriteLine( "Requesting Type " + typeof(T).Name + " ...", OBDLogLevel.Debug );
 			int   pid  = ResolvePid<T>();
 			byte? mode = ResolveMode<T>();
 			return await RequestDataAsync( pid, mode ) as T;
@@ -165,7 +192,7 @@ namespace OBD.NET.Common.Devices
 
 			if ( message.ToUpper() == "CAN ERROR" )
 			{
-				this.CanError?.Invoke( this, new EventArgs() );
+				this.CanError?.Invoke( this, new CanErrorEventArgs { Message = message } );
 			}
 			else if ( message.Length > 4 )
 			{
@@ -194,7 +221,7 @@ namespace OBD.NET.Common.Devices
 							if ( DataReceivedEventHandlers.TryGetValue( dataType, out IDataEventManager dataEventManager ) )
 								dataEventManager.RaiseEvent( this, obdData, timestamp );
 
-							if ( DataReceivedEventHandlers.TryGetValue( typeof( IOBDData ), out IDataEventManager genericDataEventManager ) )
+							if ( DataReceivedEventHandlers.TryGetValue( typeof(IOBDData), out IDataEventManager genericDataEventManager ) )
 								genericDataEventManager.RaiseEvent( this, obdData, timestamp );
 
 							return obdData;
@@ -213,14 +240,14 @@ namespace OBD.NET.Common.Devices
 		protected virtual int ResolvePid<T>()
 			where T : class, IOBDData, new()
 		{
-			if ( !PidCache.TryGetValue( typeof( T ), out int pid ) )
+			if ( !PidCache.TryGetValue( typeof(T), out int pid ) )
 				pid = AddToPidCache<T>();
 
 			return pid;
 		}
 
 		public virtual int AddToPidCache<T>()
-			where T : class, IOBDData, new() => AddToPidCache( typeof( T ) );
+			where T : class, IOBDData, new() => AddToPidCache( typeof(T) );
 
 		protected virtual int AddToPidCache( Type obdDataType )
 		{
@@ -239,14 +266,14 @@ namespace OBD.NET.Common.Devices
 		protected virtual byte? ResolveMode<T>()
 			where T : class, IOBDData
 		{
-			if ( !ModeCache.TryGetValue( typeof( T ), out byte? mode ) )
+			if ( !ModeCache.TryGetValue( typeof(T), out byte? mode ) )
 				mode = AddToModeCache<T>();
 
 			return mode;
 		}
 
 		public virtual byte? AddToModeCache<T>()
-			where T : class, IOBDData => AddToModeCache( typeof( T ) );
+			where T : class, IOBDData => AddToModeCache( typeof(T) );
 
 		protected virtual byte? AddToModeCache( Type obdDataType )
 		{
@@ -268,7 +295,7 @@ namespace OBD.NET.Common.Devices
 		/// </summary>
 		public virtual void InitializePidCache()
 		{
-			TypeInfo iobdDataInfo = typeof( IOBDData ).GetTypeInfo();
+			TypeInfo iobdDataInfo = typeof(IOBDData).GetTypeInfo();
 			foreach ( TypeInfo obdDataType in iobdDataInfo.Assembly.DefinedTypes.Where( t => t.IsClass && !t.IsAbstract && iobdDataInfo.IsAssignableFrom( t ) ) )
 				AddToPidCache( obdDataType.AsType() );
 		}
@@ -294,15 +321,15 @@ namespace OBD.NET.Common.Devices
 
 		public void SubscribeDataReceived<T>( DataReceivedEventHandler<T> eventHandler ) where T : IOBDData
 		{
-			if ( !DataReceivedEventHandlers.TryGetValue( typeof( T ), out IDataEventManager eventManager ) )
-				DataReceivedEventHandlers.Add( typeof( T ), ( eventManager = new GenericDataEventManager<T>() ) );
+			if ( !DataReceivedEventHandlers.TryGetValue( typeof(T), out IDataEventManager eventManager ) )
+				DataReceivedEventHandlers.Add( typeof(T), ( eventManager = new GenericDataEventManager<T>() ) );
 
 			( (GenericDataEventManager<T>) eventManager ).DataReceived += eventHandler;
 		}
 
 		public void UnsubscribeDataReceived<T>( DataReceivedEventHandler<T> eventHandler ) where T : IOBDData
 		{
-			if ( DataReceivedEventHandlers.TryGetValue( typeof( T ), out IDataEventManager eventManager ) )
+			if ( DataReceivedEventHandlers.TryGetValue( typeof(T), out IDataEventManager eventManager ) )
 				( (GenericDataEventManager<T>) eventManager ).DataReceived -= eventHandler;
 		}
 

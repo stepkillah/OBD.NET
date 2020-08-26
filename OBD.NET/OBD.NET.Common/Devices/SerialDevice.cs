@@ -98,7 +98,7 @@ namespace OBD.NET.Common.Devices
         /// </summary>
         /// <param name="command">command string</param>
         /// <exception cref="System.InvalidOperationException">Not connected</exception>
-        protected virtual CommandResult SendCommand(string command)
+        public virtual CommandResult SendCommand(string command)
         {
             if (!Connection.IsOpen)
                 throw new InvalidOperationException("Not connected");

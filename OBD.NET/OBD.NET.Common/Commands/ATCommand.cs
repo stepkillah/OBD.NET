@@ -21,6 +21,8 @@
         public static readonly ATCommand SetProtocolAuto = new ATCommand("ATSP0", "^OK$");
         public static readonly ATCommand PrintVersion = new ATCommand("ATI", "^ELM327.*");
         public static readonly ATCommand CloseProtocol = new ATCommand("ATPC");
+        public static readonly ATCommand SetHeader = new ATCommand("ATSH");
+        public static readonly ATCommand ResetHeader = new ATCommand("ATSH 7E0");
 
         // ReSharper restore InconsistentNaming
         #endregion
