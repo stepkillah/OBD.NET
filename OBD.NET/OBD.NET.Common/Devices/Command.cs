@@ -9,7 +9,9 @@
 
         public string CommandText { get; private set; }
 
-        public CommandResult CommandResult { get; }
+        public CommandResult CommandResult   { get; }
+
+		public bool WaitForResponse { get; set; } = true;
 
         #endregion
 

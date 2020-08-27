@@ -113,23 +113,16 @@ namespace OBD.NET.Common.Devices
 			return commandResult.Result;
 		}
 
-		public virtual async Task<object> SendCommandAsync( string header, string command, bool waitForResponse = false )
+		public virtual void SendCommand( string header, string command, bool waitForResponse = true )
 		{
 			// First set the header
-			await this.SendCommandAsync( ATCommand.SetHeader.Command + " " + header );
-
-			object result;
+			this.SendCommand( ATCommand.SetHeader.Command + " " + header );
 
 			// Now send the command
-			if ( waitForResponse )
-				result = await this.SendCommandAsync( command );
-			else
-				result = this.SendCommand( command );
+			this.SendCommand( command, waitForResponse );
 
 			// Reset the header
-			this.SendCommand( ATCommand.ResetHeader );
-
-			return result;
+			// this.SendCommand( ATCommand.ResetHeader );
 		}
 
 		/// <summary>
@@ -139,7 +132,7 @@ namespace OBD.NET.Common.Devices
 		public virtual void RequestData<T>()
 			where T : class, IOBDData, new()
 		{
-			Logger?.WriteLine( "Requesting Type " + typeof(T).Name + " ...", OBDLogLevel.Debug );
+			Logger?.WriteLine( "Requesting Type " + typeof( T ).Name + " ...", OBDLogLevel.Debug );
 
 			int   pid  = ResolvePid<T>();
 			byte? mode = ResolveMode<T>();
@@ -166,7 +159,7 @@ namespace OBD.NET.Common.Devices
 		public virtual async Task<T> RequestDataAsync<T>()
 			where T : class, IOBDData, new()
 		{
-			Logger?.WriteLine( "Requesting Type " + typeof(T).Name + " ...", OBDLogLevel.Debug );
+			Logger?.WriteLine( "Requesting Type " + typeof( T ).Name + " ...", OBDLogLevel.Debug );
 			int   pid  = ResolvePid<T>();
 			byte? mode = ResolveMode<T>();
 			return await RequestDataAsync( pid, mode ) as T;
@@ -175,13 +168,12 @@ namespace OBD.NET.Common.Devices
 		/// <summary>
 		/// Requests the data asynchronous and return the data when available
 		/// </summary>
-		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
-		public virtual async Task<IOBDData> RequestDataAsync(Type type)
+		public virtual async Task<IOBDData> RequestDataAsync( Type type )
 		{
-			Logger?.WriteLine("Requesting Type " + type.Name + " ...", OBDLogLevel.Debug);
-			int pid = ResolvePid(type);
-			return await RequestDataAsync(pid) as IOBDData;
+			Logger?.WriteLine( "Requesting Type " + type.Name + " ...", OBDLogLevel.Debug );
+			int pid = ResolvePid( type );
+			return await RequestDataAsync( pid ) as IOBDData;
 		}
 
 		/// <summary>
@@ -200,7 +192,7 @@ namespace OBD.NET.Common.Devices
 
 		protected override object ProcessMessage( string message )
 		{
-			if (message == null) return null;
+			if ( message == null ) return null;
 
 			DateTime timestamp = DateTime.Now;
 
@@ -215,15 +207,15 @@ namespace OBD.NET.Common.Devices
 				// DarthAffe 15.08.2020: Splitted messages are prefixed with 0: (first chunk) and 1: (second chunk)
 				// DarthAffe 15.08.2020: They also seem to be always preceded by a '009'-message, but since that's to short to be processed it should be safe to ignore.
 				// DarthAffe 15.08.2020: Since that behavior isn't really documented (at least I wasn't able to find it) that's all trial and error and might not work for all pids with long results.
-				if (message[1] == ':')
+				if ( message[ 1 ] == ':' )
 				{
-					if (message[0] == '0')
-						MessageChunk = message.Substring(2, message.Length - 2);
-					else if (message[0] == '1')
+					if ( message[ 0 ] == '0' )
+						MessageChunk = message.Substring( 2, message.Length - 2 );
+					else if ( message[ 0 ] == '1' )
 					{
-						string fullMessage = MessageChunk + message.Substring(2, message.Length - 2);
+						string fullMessage = MessageChunk + message.Substring( 2, message.Length - 2 );
 						MessageChunk = null;
-						return ProcessMessage(fullMessage);
+						return ProcessMessage( fullMessage );
 					}
 				}
 				else
@@ -253,7 +245,7 @@ namespace OBD.NET.Common.Devices
 								if ( DataReceivedEventHandlers.TryGetValue( dataType, out IDataEventManager dataEventManager ) )
 									dataEventManager.RaiseEvent( this, obdData, timestamp );
 
-								if ( DataReceivedEventHandlers.TryGetValue( typeof(IOBDData), out IDataEventManager genericDataEventManager ) )
+								if ( DataReceivedEventHandlers.TryGetValue( typeof( IOBDData ), out IDataEventManager genericDataEventManager ) )
 									genericDataEventManager.RaiseEvent( this, obdData, timestamp );
 
 								return obdData;
@@ -272,18 +264,18 @@ namespace OBD.NET.Common.Devices
 
 		protected virtual int ResolvePid<T>()
 			where T : class, IOBDData, new()
-			=> ResolvePid(typeof(T));
+			=> ResolvePid( typeof( T ) );
 
-		protected virtual int ResolvePid(Type type)
+		protected virtual int ResolvePid( Type type )
 		{
-			if (!PidCache.TryGetValue(type, out int pid))
-				pid = AddToPidCache(type);
+			if ( !PidCache.TryGetValue( type, out int pid ) )
+				pid = AddToPidCache( type );
 
 			return pid;
 		}
 
 		public virtual int AddToPidCache<T>()
-			where T : class, IOBDData, new() => AddToPidCache( typeof(T) );
+			where T : class, IOBDData, new() => AddToPidCache( typeof( T ) );
 
 		protected virtual int AddToPidCache( Type obdDataType )
 		{
@@ -302,14 +294,14 @@ namespace OBD.NET.Common.Devices
 		protected virtual byte? ResolveMode<T>()
 			where T : class, IOBDData
 		{
-			if ( !ModeCache.TryGetValue( typeof(T), out byte? mode ) )
+			if ( !ModeCache.TryGetValue( typeof( T ), out byte? mode ) )
 				mode = AddToModeCache<T>();
 
 			return mode;
 		}
 
 		public virtual byte? AddToModeCache<T>()
-			where T : class, IOBDData => AddToModeCache( typeof(T) );
+			where T : class, IOBDData => AddToModeCache( typeof( T ) );
 
 		protected virtual byte? AddToModeCache( Type obdDataType )
 		{
@@ -331,7 +323,7 @@ namespace OBD.NET.Common.Devices
 		/// </summary>
 		public virtual void InitializePidCache()
 		{
-			TypeInfo iobdDataInfo = typeof(IOBDData).GetTypeInfo();
+			TypeInfo iobdDataInfo = typeof( IOBDData ).GetTypeInfo();
 			foreach ( TypeInfo obdDataType in iobdDataInfo.Assembly.DefinedTypes.Where( t => t.IsClass && !t.IsAbstract && iobdDataInfo.IsAssignableFrom( t ) ) )
 				AddToPidCache( obdDataType.AsType() );
 		}
@@ -357,15 +349,15 @@ namespace OBD.NET.Common.Devices
 
 		public void SubscribeDataReceived<T>( DataReceivedEventHandler<T> eventHandler ) where T : IOBDData
 		{
-			if ( !DataReceivedEventHandlers.TryGetValue( typeof(T), out IDataEventManager eventManager ) )
-				DataReceivedEventHandlers.Add( typeof(T), ( eventManager = new GenericDataEventManager<T>() ) );
+			if ( !DataReceivedEventHandlers.TryGetValue( typeof( T ), out IDataEventManager eventManager ) )
+				DataReceivedEventHandlers.Add( typeof( T ), ( eventManager = new GenericDataEventManager<T>() ) );
 
 			( (GenericDataEventManager<T>) eventManager ).DataReceived += eventHandler;
 		}
 
 		public void UnsubscribeDataReceived<T>( DataReceivedEventHandler<T> eventHandler ) where T : IOBDData
 		{
-			if ( DataReceivedEventHandlers.TryGetValue( typeof(T), out IDataEventManager eventManager ) )
+			if ( DataReceivedEventHandlers.TryGetValue( typeof( T ), out IDataEventManager eventManager ) )
 				( (GenericDataEventManager<T>) eventManager ).DataReceived -= eventHandler;
 		}
 
