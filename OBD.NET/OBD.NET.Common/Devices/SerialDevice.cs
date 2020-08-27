@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OBD.NET.Common.Communication;
 using OBD.NET.Common.Communication.EventArgs;
+using OBD.NET.Common.Events.EventArgs;
 using OBD.NET.Common.Exceptions;
 using OBD.NET.Common.Logging;
 
@@ -26,12 +27,19 @@ namespace OBD.NET.Common.Devices
 		private volatile int              _queueSize       = 0;
 		private readonly ManualResetEvent _queueEmptyEvent = new ManualResetEvent( true );
 
-		public int QueueSize => _queueSize;
+		public int       QueueSize      => _queueSize;
+		public TimeSpan? CommandTimeout { get; set; }
 
 		protected QueuedCommand     CurrentCommand;
 		protected IOBDLogger        Logger     { get; }
 		protected ISerialConnection Connection { get; }
 		protected char              Terminator { get; set; }
+
+		#endregion
+
+		#region Events
+
+		public event EventHandler<SocketErrorEventArgs> SocketError;
 
 		#endregion
 
@@ -45,9 +53,9 @@ namespace OBD.NET.Common.Devices
 		/// <param name="logger">logger instance</param>
 		protected SerialDevice( ISerialConnection connection, char terminator = '\r', IOBDLogger logger = null )
 		{
-			this.Connection = connection;
-			this.Terminator = terminator;
-			this.Logger     = logger;
+			Connection = connection;
+			Terminator = terminator;
+			Logger     = logger;
 
 			connection.DataReceived += OnDataReceived;
 		}
@@ -92,11 +100,11 @@ namespace OBD.NET.Common.Devices
 			_commandWorkerTask        = Task.Factory.StartNew( CommandWorker );
 		}
 
-
 		/// <summary>
 		/// Sends the command.
 		/// </summary>
 		/// <param name="command">command string</param>
+		/// <param name="waitForResponse"></param>
 		/// <exception cref="System.InvalidOperationException">Not connected</exception>
 		public virtual CommandResult SendCommand( string command, bool waitForResponse = true )
 		{
@@ -106,9 +114,9 @@ namespace OBD.NET.Common.Devices
 			command = PrepareCommand( command );
 			Logger?.WriteLine( "Queuing Command: '" + command.Replace( '\r', '\'' ) + "'", OBDLogLevel.Verbose );
 
-			QueuedCommand cmd = new QueuedCommand( command ) { WaitForResponse = waitForResponse };
+			QueuedCommand cmd = new QueuedCommand( command, CommandTimeout ) { WaitForResponse = waitForResponse };
 			_queueEmptyEvent.Reset();
-			_queueSize++;
+			Interlocked.Increment( ref _queueSize );
 			_commandQueue.Add( cmd );
 
 			return cmd.CommandResult;
@@ -200,39 +208,55 @@ namespace OBD.NET.Common.Devices
 		{
 			while ( !_commandCancellationToken.IsCancellationRequested )
 			{
-				CurrentCommand = null;
-
-				if ( _queueSize == 0 )
-					_queueEmptyEvent.Set();
-
 				try
 				{
-					if ( _commandQueue.TryTake( out CurrentCommand, 10, _commandCancellationToken.Token ) )
+					CurrentCommand = null;
+
+					if ( _queueSize == 0 )
+						_queueEmptyEvent.Set();
+
+					try
 					{
-						_queueSize--;
+						if ( _commandQueue.TryTake( out CurrentCommand, 10, _commandCancellationToken.Token ) )
+						{
+							Interlocked.Decrement( ref _queueSize );
 
-						Logger?.WriteLine( "Writing Command: '" + CurrentCommand.CommandText.Replace( '\r', '\'' ) + "'", OBDLogLevel.Verbose );
+							Logger?.WriteLine( "Writing Command: '" + CurrentCommand.CommandText.Replace( '\r', '\'' ) + "'", OBDLogLevel.Verbose );
 
-						if ( Connection.IsAsync )
-							await Connection.WriteAsync( Encoding.ASCII.GetBytes( CurrentCommand.CommandText ) );
-						else
-							Connection.Write( Encoding.ASCII.GetBytes( CurrentCommand.CommandText ) );
+							if ( Connection.IsAsync )
+								await Connection.WriteAsync( Encoding.ASCII.GetBytes( CurrentCommand.CommandText ) );
+							else
+								// ReSharper disable once MethodHasAsyncOverload
+								Connection.Write( Encoding.ASCII.GetBytes( CurrentCommand.CommandText ) );
 
-						//wait for command to finish
-						if ( CurrentCommand.WaitForResponse )
-							_commandFinishedEvent.WaitOne();
+							//wait for command to finish
+							if ( CurrentCommand.WaitForResponse )
+							{
+								if ( CurrentCommand.Timeout.HasValue )
+									_commandFinishedEvent.WaitOne( CurrentCommand.Timeout.Value );
+								else
+									_commandFinishedEvent.WaitOne();
+							}
+						}
+					}
+					catch ( OperationCanceledException )
+					{
+						/*ignore, because it is thrown when the cancellation token is canceled*/
 					}
 				}
-				catch ( OperationCanceledException )
+				catch ( Exception ex )
 				{
-					/*ignore, because it is thrown when the cancellation token is canceled*/
+					SocketError?.Invoke( this, new SocketErrorEventArgs( ex ) );
+					Connection.Dispose();
 				}
 			}
 		}
 
 		public void WaitQueue() => _queueEmptyEvent.WaitOne();
+		public bool WaitQueue( TimeSpan timeout ) => _queueEmptyEvent.WaitOne( timeout );
 
-		public async Task WaitQueueAsync() => await Task.Run( () => WaitQueue() );
+		public Task WaitQueueAsync() => Task.Run( WaitQueue );
+		public Task<bool> WaitQueueAsync( TimeSpan timeout ) => Task.Run( () => WaitQueue( timeout ) );
 
 		/// <summary>
 		/// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
@@ -242,7 +266,7 @@ namespace OBD.NET.Common.Devices
 			_commandQueue.CompleteAdding();
 			_commandCancellationToken?.Cancel();
 			_commandWorkerTask?.Wait();
-			Connection?.Dispose();
+			Connection.Dispose();
 		}
 
 		#endregion

@@ -1,4 +1,6 @@
-﻿namespace OBD.NET.Common.Devices
+﻿using System;
+
+namespace OBD.NET.Common.Devices
 {
     /// <summary>
     /// Class used for queued command
@@ -13,16 +15,18 @@
 
 		public bool WaitForResponse { get; set; } = true;
 
+        public TimeSpan? Timeout { get; set; }
+
         #endregion
 
         #region Constructors
 
-        public QueuedCommand(string commandText)
+        public QueuedCommand(string commandText, TimeSpan? timeout = default)
         {
-            this.CommandText = commandText;
-
+            CommandText   = commandText;
             CommandResult = new CommandResult();
-        }
+			Timeout       = timeout;
+		}
 
         #endregion
     }
