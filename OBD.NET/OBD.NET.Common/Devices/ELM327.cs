@@ -113,18 +113,6 @@ namespace OBD.NET.Common.Devices
 			return commandResult.Result;
 		}
 
-		public virtual void SendCommand( string header, string command, bool waitForResponse = true )
-		{
-			// First set the header
-			this.SendCommand( ATCommand.SetHeader.Command + " " + header );
-
-			// Now send the command
-			this.SendCommand( command, waitForResponse );
-
-			// Reset the header
-			// this.SendCommand( ATCommand.ResetHeader );
-		}
-
 		/// <summary>
 		/// Requests the data and calls the handler
 		/// </summary>
