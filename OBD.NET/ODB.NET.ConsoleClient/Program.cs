@@ -59,7 +59,7 @@ namespace OBD.NET.ConsoleClient
         {
             using SerialConnection connection = new SerialConnection(comPort);
             using ELM327 dev = new ELM327(connection, new OBDConsoleLogger(OBDLogLevel.Debug));
-            await dev.InitializeAsync();
+            dev.Initialize();
             EngineRPM data = await dev.RequestDataAsync<EngineRPM>();
             Console.WriteLine("Data: " + data.Rpm);
             data = await dev.RequestDataAsync<EngineRPM>();
