@@ -21,9 +21,9 @@ namespace OBD.NET.Common.Devices
 
         protected readonly Dictionary<Type, IDataEventManager> DataReceivedEventHandlers = new Dictionary<Type, IDataEventManager>();
 
-        protected static Dictionary<Type, int>   PidCache      { get; } = new Dictionary<Type, int>();
-        protected static Dictionary<Type, byte?> ModeCache     { get; } = new Dictionary<Type, byte?>();
-        protected static Dictionary<int, Type>   DataTypeCache { get; } = new Dictionary<int, Type>();
+        protected static Dictionary<Type, int> PidCache { get; } = new Dictionary<Type, int>();
+        protected static Dictionary<Type, byte?> ModeCache { get; } = new Dictionary<Type, byte?>();
+        protected static Dictionary<int, Type> DataTypeCache { get; } = new Dictionary<int, Type>();
 
         protected Mode Mode { get; set; } = Mode.ShowCurrentData; //TODO DarthAffe 26.06.2016: Implement different modes
 
@@ -37,7 +37,7 @@ namespace OBD.NET.Common.Devices
 
         public delegate void RawDataReceivedEventHandler(object sender, RawDataReceivedEventArgs args);
 
-        public event RawDataReceivedEventHandler     RawDataReceived;
+        public event RawDataReceivedEventHandler RawDataReceived;
         public event EventHandler<CanErrorEventArgs> CanError;
 
         #endregion
@@ -122,7 +122,7 @@ namespace OBD.NET.Common.Devices
         {
             Logger?.WriteLine("Requesting Type " + typeof(T).Name + " ...", OBDLogLevel.Debug);
 
-            int   pid  = ResolvePid<T>();
+            int pid = ResolvePid<T>();
             byte? mode = ResolveMode<T>();
 
             RequestData(pid, mode, maxResponses);
@@ -155,7 +155,7 @@ namespace OBD.NET.Common.Devices
             where T : class, IOBDData, new()
         {
             Logger?.WriteLine("Requesting Type " + typeof(T).Name + " ...", OBDLogLevel.Debug);
-            int   pid  = ResolvePid<T>();
+            int pid = ResolvePid<T>();
             byte? mode = ResolveMode<T>();
             return await RequestDataAsync(pid, mode, maxResponses) as T;
         }
@@ -209,11 +209,11 @@ namespace OBD.NET.Common.Devices
                 // DarthAffe 15.08.2020: Splitted messages are prefixed with 0: (first chunk) and 1: (second chunk)
                 // DarthAffe 15.08.2020: They also seem to be always preceded by a '009'-message, but since that's to short to be processed it should be safe to ignore.
                 // DarthAffe 15.08.2020: Since that behavior isn't really documented (at least I wasn't able to find it) that's all trial and error and might not work for all pids with long results.
-                if (message[ 1 ] == ':')
+                if (message[1] == ':')
                 {
-                    if (message[ 0 ] == '0')
+                    if (message[0] == '0')
                         MessageChunk = message.Substring(2, message.Length - 2);
-                    else if (message[ 0 ] == '1')
+                    else if (message[0] == '1')
                     {
                         string fullMessage = MessageChunk + message.Substring(2, message.Length - 2);
                         MessageChunk = null;
@@ -229,8 +229,8 @@ namespace OBD.NET.Common.Devices
 
                         if (resMode == GetModeByte() + 0x40 || ModeCache.ContainsValue((byte)(resMode - 0x40)))
                         {
-                            byte pid     = (byte)message.Substring(2, 2).GetHexVal();
-                            int  longPid = message.Substring(2, 4).GetHexVal();
+                            byte pid = (byte)message.Substring(2, 2).GetHexVal();
+                            int longPid = message.Substring(2, 4).GetHexVal();
                             if (DataTypeCache.TryGetValue(longPid, out Type dataType) || DataTypeCache.TryGetValue(pid, out dataType))
                             {
                                 if (ModeCache.TryGetValue(dataType, out var modeByte) && (modeByte ?? GetModeByte()) != resMode - 0x40)
@@ -240,8 +240,8 @@ namespace OBD.NET.Common.Devices
                                 }
 
                                 IOBDData obdData = (IOBDData)Activator.CreateInstance(dataType);
-                                bool     isLong  = obdData.PID == longPid;
-                                int      start   = isLong ? 6 : 4;
+                                bool isLong = obdData.PID == longPid;
+                                int start = isLong ? 6 : 4;
                                 obdData.Load(message.Substring(start, message.Length - start));
 
                                 if (DataReceivedEventHandlers.TryGetValue(dataType, out IDataEventManager dataEventManager))
@@ -308,7 +308,7 @@ namespace OBD.NET.Common.Devices
         protected virtual byte? AddToModeCache(Type obdDataType)
         {
             var modeAttribute = obdDataType.GetTypeInfo().GetCustomAttribute<ObdModeAttribute>();
-            var modeOverride  = modeAttribute?.Mode;
+            var modeOverride = modeAttribute?.Mode;
 
             ModeCache.Add(obdDataType, modeOverride);
 

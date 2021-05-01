@@ -1,19 +1,20 @@
 ﻿using System;
+using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
 using System.Threading.Tasks;
-using OBD.NET.Common.Communication.EventArgs;
 using Windows.Devices.Bluetooth.Rfcomm;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
-using System.Linq;
+using OBD.NET.Common.Communication;
+using OBD.NET.Common.Communication.EventArgs;
 
-namespace OBD.NET.Communication
+namespace OBD.NET.Universal.Communication
 {
     /// <summary>
     /// Bluetooth OBD serial implementation
     /// </summary>
-    /// <seealso cref="OBD.NET.Communication.ISerialConnection" />
+    /// <seealso cref="ISerialConnection" />
     public class BluetoothSerialConnection : ISerialConnection
     {
 

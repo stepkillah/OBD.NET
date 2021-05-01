@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OBD.NET.Common.Communication;
 
-namespace ODB.NET.Desktop.Communication
+namespace OBD.NET.Desktop.Communication
 {
     public class SerialConnection : ISerialConnection
     {
@@ -67,7 +67,7 @@ namespace ODB.NET.Desktop.Communication
 
         public Task WriteAsync(byte[] data) => throw new NotSupportedException("Asynchronous operations not supported");
 
-        public void Write(byte[] data) => _serialPort.Write(data, 0, data.Length);
+        public void Write(byte[] data) => _serialPort.BaseStream.Write(data, 0, data.Length);
 
         #endregion
     }

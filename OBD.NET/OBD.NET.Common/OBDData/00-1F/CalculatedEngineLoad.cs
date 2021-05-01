@@ -6,7 +6,7 @@ namespace OBD.NET.Common.OBDData
     {
         #region Properties & Fields
 
-        public Percent Load => new Percent(A / 2.55, 0, 100);
+        public Percent Data => new Percent(A / 2.55, 0, 100);
 
         #endregion
 
@@ -20,7 +20,7 @@ namespace OBD.NET.Common.OBDData
 
         #region Methods
 
-        public override string ToString() => Load.ToString();
+        public override string ToString() => Data.ToString();
 
         #endregion
     }
