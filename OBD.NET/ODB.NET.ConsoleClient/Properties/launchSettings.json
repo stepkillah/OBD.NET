@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "OBD.NET.ConsoleClient": {
-      "commandName": "Project",
-      "commandLineArgs": "COM3"
-    }
-  }
-}
